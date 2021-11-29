@@ -1,0 +1,244 @@
+library(readxl)
+library(rstatix)
+library(lmtest)
+library(sandwich)
+library(dplyr)
+
+
+
+######## SAVE THE "NHLDataFrame_toapply" EXCEL FILE FROM GITHUB TO YOUR LOCAL DIRECTORY
+
+NHLDataFrame<-as.data.frame(read_excel("NHLDataFrame_toapply.xlsx",range = "A1:S12280"))
+
+####### CONVERT COLUMNS INTO CORRECT DATA TYPE
+
+
+NHLDataFrame=data.frame(Season=NHLDataFrame$Season, 
+Date=NHLDataFrame$Date,
+Location=NHLDataFrame$Location,
+HomeTeam=NHLDataFrame$HomeTeam,
+HomeScore=as.numeric(NHLDataFrame$HomeScore),
+AwayTeam=NHLDataFrame$AwayTeam,
+AwayScore=as.numeric(NHLDataFrame$AwayScore),
+AwayPenalty=as.numeric(NHLDataFrame$AwayPenalty),
+HomePenalty=as.numeric(NHLDataFrame$HomePenalty),
+Weekday=NHLDataFrame$Weekday,
+HomeSeason=NHLDataFrame$HomeSeason,
+AwaySeason=NHLDataFrame$AwaySeason,
+Attendance=as.numeric(NHLDataFrame$Attendance),
+Attendancein1000s=as.numeric(NHLDataFrame$Attendancein1000s),
+RegularPlayoff=NHLDataFrame$RegularPlayoff, Homewin=as.numeric(NHLDataFrame$Homewin), ClosedDoors=as.numeric(NHLDataFrame$ClosedDoors),RelativeAtt=as.numeric(NHLDataFrame$RelativeAtt))
+
+
+
+
+###### REMOVE GAMES PLAYED AT NEUTRAL SITES
+NHLDataFrameFilt=NHLDataFrame[!is.na(NHLDataFrame$Homewin),]
+
+###### IDENTIFY GAMES PLAYED IN THE LAST 1, 2 OR 3 SEASONS
+NHLDataFrameFiltOnlylast1Season=NHLDataFrameFilt[NHLDataFrameFilt$Season %in% c("2020-21 season:"),]
+NHLDataFrameFiltOnlylast2Seasons=NHLDataFrameFilt[NHLDataFrameFilt$Season %in% c("2020-21 season:", "2019-20 season:"),]
+NHLDataFrameFiltOnlylast3Seasons=NHLDataFrameFilt[NHLDataFrameFilt$Season %in% c("2020-21 season:", "2019-20 season:", "2018-19 season:"),]
+
+###### IDENTIFY GAMES PLAYED WITHOUT CLOSED DOORS
+NHLDataFrameFiltOnlyAudience=NHLDataFrameFilt[NHLDataFrameFilt$ClosedDoors==0,]
+
+###### IDENTIFY GAMES PLAYED WITHOUT CLOSED DOORS AND BEFORE THE EMERGENCE OF COVID-19
+NHLDataFrameFiltOnlyAudienceNO2020=NHLDataFrameFiltOnlyAudience[NHLDataFrameFiltOnlyAudience$Season!="2020-21 season:",]
+
+###### CALCULATE STATISTICS AND T TESTS
+
+NHLDataFrameFiltafterCOVID=setdiff(NHLDataFrameFilt,NHLDataFrameFiltOnlyAudienceNO2020)
+
+mean(NHLDataFrameFiltOnlyAudienceNO2020$Homewin)
+mean(NHLDataFrameFiltOnlyAudienceNO2020$HomeScore)
+mean(NHLDataFrameFiltOnlyAudienceNO2020$AwayScore)
+mean(NHLDataFrameFiltOnlyAudienceNO2020$HomeScore+NHLDataFrameFiltOnlyAudienceNO2020$AwayScore)
+mean(NHLDataFrameFiltOnlyAudienceNO2020$HomeScore-NHLDataFrameFiltOnlyAudienceNO2020$AwayScore)
+mean(NHLDataFrameFiltOnlyAudienceNO2020$HomePenalty)
+mean(NHLDataFrameFiltOnlyAudienceNO2020$AwayPenalty)
+mean(NHLDataFrameFiltOnlyAudienceNO2020$HomePenalty+NHLDataFrameFiltOnlyAudienceNO2020$AwayPenalty)
+mean(NHLDataFrameFiltOnlyAudienceNO2020$HomePenalty-NHLDataFrameFiltOnlyAudienceNO2020$AwayPenalty)
+
+
+
+t.test(Homewin ~ ClosedDoors, data = NHLDataFrameFiltafterCOVID)
+cohens_d(Homewin ~ ClosedDoors, data = NHLDataFrameFiltafterCOVID)
+t.test(HomeScore ~ ClosedDoors, data = NHLDataFrameFiltafterCOVID)
+cohens_d(HomeScore ~ ClosedDoors, data = NHLDataFrameFiltafterCOVID)
+t.test(AwayScore ~ ClosedDoors, data = NHLDataFrameFiltafterCOVID)
+cohens_d(AwayScore ~ ClosedDoors, data = NHLDataFrameFiltafterCOVID)
+t.test(HomePenalty ~ ClosedDoors, data = NHLDataFrameFiltafterCOVID)
+cohens_d(HomePenalty ~ ClosedDoors, data = NHLDataFrameFiltafterCOVID)
+t.test(AwayPenalty ~ ClosedDoors, data = NHLDataFrameFiltafterCOVID)
+cohens_d(AwayPenalty ~ ClosedDoors, data = NHLDataFrameFiltafterCOVID)
+
+#### DO IT FOR DIFFERENCES AND SUMS AS WELL
+HomeminusAwayPenlast1=NHLDataFrameFiltafterCOVID$HomePenalty-NHLDataFrameFiltafterCOVID$AwayPenalty
+HomeplusAwayPenlast1=NHLDataFrameFiltafterCOVID$HomePenalty+NHLDataFrameFiltafterCOVID$AwayPenalty
+HomeminusAwayScorelast1=NHLDataFrameFiltafterCOVID$HomeScore-NHLDataFrameFiltafterCOVID$AwayScore
+HomeplusAwayScorelast1=NHLDataFrameFiltafterCOVID$HomeScore+NHLDataFrameFiltafterCOVID$AwayScore
+NHLDataFrameFiltafterCOVID_1=data.frame(NHLDataFrameFiltafterCOVID,HomeminusAwayPenlast1=HomeminusAwayPenlast1,HomeplusAwayPenlast1=HomeplusAwayPenlast1,HomeminusAwayScorelast1=HomeminusAwayScorelast1,HomeplusAwayScorelast1=HomeplusAwayScorelast1)
+
+
+t.test(HomeminusAwayPenlast1 ~ ClosedDoors, data = NHLDataFrameFiltafterCOVID_1)
+t.test(HomeplusAwayPenlast1 ~ ClosedDoors, data = NHLDataFrameFiltafterCOVID_1)
+t.test(HomeminusAwayScorelast1 ~ ClosedDoors, data = NHLDataFrameFiltafterCOVID_1)
+t.test(HomeplusAwayScorelast1 ~ ClosedDoors, data = NHLDataFrameFiltafterCOVID_1)
+cohens_d(HomeminusAwayScorelast1 ~ ClosedDoors, data = NHLDataFrameFiltafterCOVID_1)
+cohens_d(HomeplusAwayScorelast1 ~ ClosedDoors, data = NHLDataFrameFiltafterCOVID_1)
+cohens_d(HomeminusAwayPenlast1 ~ ClosedDoors, data = NHLDataFrameFiltafterCOVID_1)
+cohens_d(HomeplusAwayPenlast1 ~ ClosedDoors, data = NHLDataFrameFiltafterCOVID_1)
+
+
+###### CALCULATE RESULTS TO PANEL REGRESSIONS
+
+#### ClosedDoors AS REGRESSOR
+
+## LAST TWO SEASONS
+summary(lm.model<-lm(Homewin ~ ClosedDoors+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlylast2Seasons))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomeScore ~ ClosedDoors+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlylast2Seasons))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(AwayScore ~ ClosedDoors+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlylast2Seasons))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomeScore+AwayScore ~ ClosedDoors+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlylast2Seasons))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomeScore-AwayScore ~ ClosedDoors+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlylast2Seasons))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomePenalty ~ ClosedDoors+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlylast2Seasons))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(AwayPenalty ~ ClosedDoors+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlylast2Seasons))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomePenalty-AwayPenalty ~ ClosedDoors+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlylast2Seasons))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomePenalty+AwayPenalty ~ ClosedDoors+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlylast2Seasons))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+
+## LAST THREE SEASONS
+
+summary(lm.model<-lm(Homewin ~ ClosedDoors+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlylast3Seasons))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomeScore ~ ClosedDoors+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlylast3Seasons))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(AwayScore ~ ClosedDoors+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlylast3Seasons))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomeScore+AwayScore ~ ClosedDoors+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlylast3Seasons))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomeScore-AwayScore ~ ClosedDoors+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlylast3Seasons))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomePenalty ~ ClosedDoors+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlylast3Seasons))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(AwayPenalty ~ ClosedDoors+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlylast3Seasons))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomePenalty-AwayPenalty ~ ClosedDoors+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlylast3Seasons))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomePenalty+AwayPenalty ~ ClosedDoors+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlylast3Seasons))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+
+## LAST ONE SEASON
+
+summary(lm.model<-lm(Homewin ~ ClosedDoors+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlylast1Season))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomeScore ~ ClosedDoors+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlylast1Season))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(AwayScore ~ ClosedDoors+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlylast1Season))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomeScore+AwayScore ~ ClosedDoors+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlylast1Season))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomeScore-AwayScore ~ ClosedDoors+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlylast1Season))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomePenalty ~ ClosedDoors+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlylast1Season))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(AwayPenalty ~ ClosedDoors+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlylast1Season))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomePenalty-AwayPenalty ~ ClosedDoors+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlylast1Season))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomePenalty+AwayPenalty ~ ClosedDoors+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlylast1Season))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+
+#### ATTENDANCE AS REGRESSOR
+
+## CONSIDER GAMES WITH POSITIVE AUDIENCE
+NHLDataFrameFiltOnlyAudience=NHLDataFrameFilt[NHLDataFrameFilt$ClosedDoors==0,]
+
+summary(lm.model<-lm(Homewin ~ Attendancein1000s+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlyAudience))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomeScore ~ Attendancein1000s+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlyAudience))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(AwayScore ~ Attendancein1000s+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlyAudience))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomeScore+AwayScore ~ Attendancein1000s+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlyAudience))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomeScore-AwayScore ~ Attendancein1000s+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlyAudience))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomePenalty ~ Attendancein1000s+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlyAudience))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(AwayPenalty ~ Attendancein1000s+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlyAudience))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomePenalty+AwayPenalty ~ Attendancein1000s+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlyAudience))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomePenalty-AwayPenalty ~ Attendancein1000s+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlyAudience))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+
+
+## CONSIDER GAMES UNDER NORMAL TIMES
+
+NHLDataFrameFiltOnlyAudienceNO2020=NHLDataFrameFiltOnlyAudience[NHLDataFrameFiltOnlyAudience$Season!="2020-21 season:",]
+
+summary(lm.model<-lm(Homewin ~ Attendancein1000s+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlyAudienceNO2020))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomeScore ~ Attendancein1000s+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlyAudienceNO2020))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(AwayScore ~ Attendancein1000s+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlyAudienceNO2020))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomeScore+AwayScore ~ Attendancein1000s+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlyAudienceNO2020))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomeScore-AwayScore ~ Attendancein1000s+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlyAudienceNO2020))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomePenalty ~ Attendancein1000s+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlyAudienceNO2020))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(AwayPenalty ~ Attendancein1000s+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlyAudienceNO2020))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomePenalty+AwayPenalty ~ Attendancein1000s+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlyAudienceNO2020))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomePenalty-AwayPenalty ~ Attendancein1000s+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlyAudienceNO2020))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+
+
+
+### NOW WITH CROWD DENSITY
+
+
+summary(lm.model<-lm(Homewin ~ RelativeAtt+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlyAudience))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomeScore ~ RelativeAtt+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlyAudience))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(AwayScore ~ RelativeAtt+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlyAudience))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomeScore+AwayScore ~ RelativeAtt+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlyAudience))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomeScore-AwayScore ~ RelativeAtt+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlyAudience))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomePenalty ~ RelativeAtt+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlyAudience))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(AwayPenalty ~ RelativeAtt+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlyAudience))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomePenalty+AwayPenalty ~ RelativeAtt+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlyAudience))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+summary(lm.model<-lm(HomePenalty-AwayPenalty ~ RelativeAtt+factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), data = NHLDataFrameFiltOnlyAudience))
+coeftest(lm.model, vcov.=vcovHC(lm.model, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+
+
+
+###### PROBIT REGRESSION AS WELL
+
+summary(myprobit <- glm(Homewin ~ ClosedDoors +factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), family = binomial(link = "probit"), data=NHLDataFrameFiltOnlylast2Seasons))
+coeftest(myprobit, vcov.=vcovHC(myprobit,  type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+1-myprobit$deviance/myprobit$null.deviance
+
+summary(myprobit <- glm(Homewin ~ Attendancein1000s +factor(RegularPlayoff)+factor(HomeSeason)+factor(AwaySeason)+factor(Weekday), family = binomial(link = "probit"), data = NHLDataFrameFiltOnlyAudience))
+coeftest(myprobit, vcov.=vcovHC(myprobit, type="HC1",cluster=c("HomeSeason","AwaySeason","Weekday","RegularPlayoff")))
+1-myprobit$deviance/myprobit$null.deviance
+
+
